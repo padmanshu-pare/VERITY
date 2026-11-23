@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { PageShell } from '../components/PageShell';
 import { Kicker } from '../components/Kicker';
 import { Button } from '../components/Button';
@@ -18,11 +18,34 @@ export const WorkspacePage: React.FC = () => {
   const [dispatchResult, setDispatchResult] = useState<EmailDispatchResult | null>(null);
   const [crmDrawerOpen, setCrmDrawerOpen] = useState(false);
   const [crmRecords, setCrmRecords] = useState<any[]>([]);
+  const [targetError, setTargetError] = useState('');
+  const [recipientError, setRecipientError] = useState('');
+  const [pipelineError, setPipelineError] = useState('');
+
+  useEffect(() => {
+    if (!crmDrawerOpen) return;
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setCrmDrawerOpen(false);
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [crmDrawerOpen]);
 
   const handleRunPipeline = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!targetCompany.trim() || isRunning) return;
+    const target = targetCompany.trim();
+    if (!target) {
+      setTargetError('Enter a company name to start the agent run.');
+      return;
+    }
+    if (target.length < 2) {
+      setTargetError('Enter at least 2 characters for the target company.');
+      return;
+    }
+    if (isRunning) return;
 
+    setTargetError('');
+    setPipelineError('');
     setIsRunning(true);
     setDispatchResult(null);
     setActiveStep('research_account');
@@ -48,10 +71,10 @@ export const WorkspacePage: React.FC = () => {
     }, 400);
 
     try {
-      const data = await runAgentPipeline(targetCompany.trim());
+      const data = await runAgentPipeline(target);
       setResult(data);
-    } catch {
-      // Handled in api
+    } catch (error) {
+      setPipelineError(error instanceof Error ? error.message : 'The agent run could not be completed. Please try again.');
     } finally {
       clearInterval(interval);
       setActiveStep(null);
@@ -63,11 +86,17 @@ export const WorkspacePage: React.FC = () => {
     if (!result || isSending) return;
     const firstStep = result.outreach_sequence.find((s) => s.channel === 'email');
     if (!firstStep) return;
+    const email = recipientEmail.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setRecipientError('Enter a valid recipient email address.');
+      return;
+    }
+    setRecipientError('');
 
     setIsSending(true);
     try {
       const dispatch = await dispatchApprovedEmail({
-        to_email: recipientEmail,
+        to_email: email,
         subject: firstStep.subject || `Outreach for ${result.company_name}`,
         body: firstStep.body,
         company_name: result.company_name,
@@ -131,10 +160,20 @@ export const WorkspacePage: React.FC = () => {
                   id="targetCompany"
                   type="text"
                   value={targetCompany}
-                  onChange={(e) => setTargetCompany(e.target.value)}
+                  onChange={(e) => {
+                    setTargetCompany(e.target.value);
+                    if (targetError) setTargetError('');
+                  }}
+                  aria-invalid={!!targetError}
+                  aria-describedby={targetError ? 'target-company-error' : undefined}
                   placeholder="E.g. Anthropic, Stripe, Datadog, Figma"
                   className="w-full bg-bg border border-border rounded-[2px] px-4 py-3 text-[16px] font-sans text-text placeholder-muted/60 focus:border-accent focus:outline-none transition-colors"
                 />
+                {targetError && (
+                  <p id="target-company-error" className="mt-2 text-[13px] text-danger" role="alert">
+                    {targetError}
+                  </p>
+                )}
               </div>
 
               <div className="md:col-span-4">
@@ -202,6 +241,14 @@ export const WorkspacePage: React.FC = () => {
           </form>
         </Card>
       </section>
+
+      {pipelineError && (
+        <section className="pb-8" role="alert" aria-live="polite">
+          <div className="border border-danger/30 bg-danger/10 rounded-[4px] p-4 text-[14px] text-danger font-sans">
+            <strong className="font-medium">Agent run failed:</strong> {pipelineError}
+          </div>
+        </section>
+      )}
 
       {/* Execution Pipeline Status */}
       {isRunning && (
@@ -368,9 +415,19 @@ export const WorkspacePage: React.FC = () => {
                       id="recipientEmail"
                       type="email"
                       value={recipientEmail}
-                      onChange={(e) => setRecipientEmail(e.target.value)}
+                      onChange={(e) => {
+                        setRecipientEmail(e.target.value);
+                        if (recipientError) setRecipientError('');
+                      }}
+                      aria-invalid={!!recipientError}
+                      aria-describedby={recipientError ? 'recipient-email-error' : undefined}
                       className="w-full bg-bg border border-border rounded-[2px] px-3.5 py-2.5 text-[14px] font-sans text-text focus:border-accent focus:outline-none"
                     />
+                    {recipientError && (
+                      <p id="recipient-email-error" className="mt-2 text-[13px] text-danger" role="alert">
+                        {recipientError}
+                      </p>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-4">
@@ -409,11 +466,16 @@ export const WorkspacePage: React.FC = () => {
                       <CheckCircle2 className="w-5 h-5 text-verified shrink-0 mt-0.5" />
                       <div className="text-[13px] font-sans text-text">
                         <div className="font-medium text-verified">
-                          Outreach Successfully Delivered to {dispatchResult.to}
+                          {dispatchResult.status === 'delivered'
+                            ? `Outreach Successfully Delivered to ${dispatchResult.to}`
+                            : `Demo dispatch prepared for ${dispatchResult.to}`}
                         </div>
                         <div className="text-muted mt-1 font-mono text-[12px]">
                           Message ID: {dispatchResult.message_id} • Gateway: {dispatchResult.provider}
                         </div>
+                        {dispatchResult.status === 'simulated' && dispatchResult.note && (
+                          <div className="text-muted mt-1 text-[12px]">{dispatchResult.note}</div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -447,11 +509,16 @@ export const WorkspacePage: React.FC = () => {
 
       {/* CRM Records Modal Drawer */}
       {crmDrawerOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="crm-dialog-title"
+        >
           <div className="bg-surface border border-border rounded-[4px] max-w-[800px] w-full max-h-[85vh] flex flex-col shadow-xl">
             <div className="p-6 border-b border-border flex items-center justify-between">
               <div>
-                <h3 className="font-serif text-[24px] text-text">CRM Synchronized Records</h3>
+                <h3 id="crm-dialog-title" className="font-serif text-[24px] text-text">CRM Synchronized Records</h3>
                 <p className="text-[13px] text-muted font-sans">
                   Auto-synced leads, buyer committees, and outreach history stored by the CRM agent.
                 </p>
@@ -459,6 +526,7 @@ export const WorkspacePage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setCrmDrawerOpen(false)}
+                aria-label="Close CRM records"
                 className="text-[14px] font-sans text-muted hover:text-text px-3 py-1 border border-border rounded-[2px]"
               >
                 Close

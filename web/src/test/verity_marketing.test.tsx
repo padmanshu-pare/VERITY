@@ -259,11 +259,17 @@ describe('Verity Marketing Website', () => {
       const sendButton = screen.getByRole('button', { name: /Authorize & Send Email/i });
       expect(sendButton).toBeInTheDocument();
 
+      const recipientInput = screen.getByLabelText(/Target Email Address/i);
+      fireEvent.change(recipientInput, { target: { value: 'not-an-email' } });
+      fireEvent.click(sendButton);
+      expect(screen.getByText('Enter a valid recipient email address.')).toBeInTheDocument();
+
+      fireEvent.change(recipientInput, { target: { value: 'delivered@resend.dev' } });
       // Click to dispatch email with integrated email agent
       fireEvent.click(sendButton);
 
       await waitFor(() => {
-        expect(screen.getByText(/Outreach Successfully Delivered/i)).toBeInTheDocument();
+        expect(screen.getByText(/Outreach Successfully Delivered|Demo dispatch prepared/i)).toBeInTheDocument();
       });
     });
   });

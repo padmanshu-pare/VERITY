@@ -25,7 +25,7 @@ if str(PROJECT_ROOT) not in sys.path:
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 
 from core import service
 from core.repo import get_repo
@@ -310,14 +310,14 @@ def reseed_database() -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 class B2BPipelineRequest(BaseModel):
-    company_name: str = Field(..., description="Target company name, e.g. Anthropic, Stripe, Datadog")
+    company_name: str = Field(..., min_length=2, max_length=120, description="Target company name")
 
 
 class EmailDispatchRequest(BaseModel):
-    to_email: str = Field(default="delivered@resend.dev")
-    subject: str
-    body: str
-    company_name: str = "Target"
+    to_email: EmailStr = Field(default="delivered@resend.dev")
+    subject: str = Field(..., min_length=1, max_length=200)
+    body: str = Field(..., min_length=1, max_length=20_000)
+    company_name: str = Field(default="Target", min_length=1, max_length=120)
 
 
 @app.post("/api/pipeline/run")
@@ -362,7 +362,7 @@ def get_crm_records() -> dict[str, Any]:
 
 @app.post("/api/email/dispatch")
 def dispatch_email(req: EmailDispatchRequest) -> dict[str, Any]:
-    """Authorized email dispatch using integrated Resend email agent."""
+    """Dispatch with Resend when configured; otherwise return an explicit simulation."""
     import datetime
     import uuid
     api_key = os.environ.get("RESEND_API_KEY", "")
@@ -388,12 +388,12 @@ def dispatch_email(req: EmailDispatchRequest) -> dict[str, Any]:
             logger.warning(f"Resend dispatch error: {exc}")
 
     return {
-        "status": "delivered",
-        "provider": "Verity Courier (TLS Authenticated)",
+        "status": "simulated",
+        "provider": "Verity Demo Courier",
         "message_id": f"msg_{uuid.uuid4().hex[:12]}_signed",
         "to": req.to_email,
         "delivered_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        "note": "Dispatched via verified outbound TLS gateway.",
+        "note": "No outbound email provider is configured. No real email was sent.",
     }
 
 

@@ -73,7 +73,7 @@ export interface PipelineRunResult {
 }
 
 export interface EmailDispatchResult {
-  status: 'delivered' | 'failed';
+  status: 'delivered' | 'simulated' | 'failed';
   provider: string;
   message_id?: string;
   to: string;
@@ -81,7 +81,7 @@ export interface EmailDispatchResult {
   note?: string;
 }
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 export async function runAgentPipeline(companyName: string): Promise<PipelineRunResult> {
   try {
@@ -196,7 +196,7 @@ export async function dispatchApprovedEmail(payload: {
 
   await new Promise((r) => setTimeout(r, 600));
   return {
-    status: 'delivered',
+    status: 'simulated',
     provider: 'Verity Courier (TLS Authenticated Gateway)',
     message_id: `msg_${Math.random().toString(36).substring(2, 12)}_signed`,
     to: payload.to_email,

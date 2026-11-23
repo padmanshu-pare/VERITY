@@ -46,7 +46,6 @@ MAX_RETRIES = 2
 
 
 def _is_mock_mode() -> bool:
-    return True
     anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
     tavily_key = os.environ.get("TAVILY_API_KEY", "")
     force_mock = os.environ.get("MOCK_MODE", "").lower() in ("true", "1", "yes")

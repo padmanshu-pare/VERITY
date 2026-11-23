@@ -12,6 +12,7 @@ export const ContactPage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [errors, setErrors] = useState<{ name?: string; email?: string }>({});
+  const [submissionError, setSubmissionError] = useState('');
 
   const benefitRows = [
     { num: '1', text: 'A short call about your goals' },
@@ -35,15 +36,15 @@ export const ContactPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmissionError('');
     if (!validate()) return;
 
     setIsSubmitting(true);
     try {
       await submitDemoRequest({ name, email, businessType });
       setIsSubmitted(true);
-    } catch {
-      // In case of error
-      setIsSubmitted(true);
+    } catch (error) {
+      setSubmissionError(error instanceof Error ? error.message : 'We could not submit your request. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -176,6 +177,12 @@ export const ContactPage: React.FC = () => {
                         <option value="Other">Other</option>
                       </select>
                     </div>
+
+                    {submissionError && (
+                      <p className="text-[13px] text-danger font-sans" role="alert">
+                        {submissionError}
+                      </p>
+                    )}
 
                     <button
                       type="submit"
